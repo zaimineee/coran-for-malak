@@ -1,0 +1,29 @@
+{
+ "name": "Coran for Malak",
+ "short_name": "Coran for Malak",
+ "lang": "fr",
+ "start_url": "./",
+ "scope": "./",
+ "display": "standalone",
+ "background_color": "#F6F3EA",
+ "theme_color": "#1E6B52",
+ "description": "Lecture, mémorisation et révision du Coran",
+ "icons": [
+  {
+   "src": "icon-192.png",
+   "sizes": "192x192",
+   "type": "image/png"
+  },
+  {
+   "src": "icon-512.png",
+   "sizes": "512x512",
+   "type": "image/png"
+  },
+  {
+   "src": "icon-512-maskable.png",
+   "sizes": "512x512",
+   "type": "image/png",
+   "purpose": "maskable"
+  }
+ ]
+}
