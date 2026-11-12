@@ -2,6 +2,7 @@
 // Supabase Edge Function « rappel » (Coran for Malak)
 // - { op: "key" } : clé publique VAPID (créée au premier appel, gardée dans public.vapid_keys, lisible par cette fonction seulement)
 // - { op: "push", target } : envoie la notification du rappel que l'ami connecté vient d'envoyer (voir send_nudge dans rappels.sql)
+// - { op: "prayers" } : appelé chaque minute par la tâche planifiée (prieres.sql, en-tête x-cron) : envoie les alertes de prière dues
 // Web Push sans bibliothèque : jeton VAPID (ES256) et chiffrement aes128gcm (RFC 8291), avec WebCrypto.
 // La fonction vérifie elle-même la session pour « push » (jeton dans l'en-tête x-session) ; le réglage « Verify JWT » peut rester activé.
 
@@ -55,11 +56,11 @@ async function encryptPush(p256dh, authSecret, payload) { // corps chiffré aes1
   const ct = new Uint8Array(await crypto.subtle.encrypt({ name: "AES-GCM", iv: nonce }, key, cat(te.encode(payload), new Uint8Array([2]))));
   return cat(salt, new Uint8Array([0, 0, 16, 0]), new Uint8Array([65]), asPub, ct); // sel, taille d'enregistrement 4096, clé de l'expéditeur
 }
-async function sendPush(sub, payload, vapid, subject) {
+async function sendPush(sub, payload, vapid, subject, opt = {}) { // opt : { ttl (secondes), urgency }
   const body = await encryptPush(sub.p256dh, sub.auth, payload);
   return fetch(sub.endpoint, {
     method: "POST",
-    headers: { TTL: "86400", Urgency: "normal", "Content-Encoding": "aes128gcm", "Content-Type": "application/octet-stream", Authorization: await vapidHeader(sub.endpoint, vapid, subject) },
+    headers: { TTL: String(opt.ttl || 86400), Urgency: opt.urgency || "normal", "Content-Encoding": "aes128gcm", "Content-Type": "application/octet-stream", Authorization: await vapidHeader(sub.endpoint, vapid, subject) },
     body,
   });
 }
@@ -95,6 +96,34 @@ async function userOf(req: Request) { // l'utilisateur connecté, d'après sa se
 }
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 
+// Alertes de prière : seulement pour la tâche planifiée (mot de passe interne de public.cron_secret)
+const PRAYER = { fajr: "Fajr", dhuhr: "Dhuhr", asr: "ʿAsr", maghrib: "Maghrib", isha: "ʿIshâ’" };
+async function prayers(req: Request) {
+  const tok = req.headers.get("x-cron") ?? "";
+  const sec = await (await db("cron_secret?id=eq.1&select=token")).json();
+  if (tok.length < 32 || !Array.isArray(sec) || !sec[0] || sec[0].token !== tok) return json({ error: "cron" }, 403);
+  const due = await (await db("rpc/claim_prayer_slots", { method: "POST", body: "{}" })).json();
+  if (!Array.isArray(due) || !due.length) return json({ sent: 0 });
+  const users = [...new Set(due.map((d) => d.user_id).filter((u) => UUID.test(String(u))))];
+  if (!users.length) return json({ sent: 0 });
+  const subs = await (await db("push_subs?select=user_id,endpoint,p256dh,auth&user_id=in.(" + users.join(",") + ")")).json();
+  const vapid = await vapidKeys();
+  let sent = 0;
+  for (const d of due) {
+    const name = PRAYER[d.prayer]; if (!name) continue;
+    const body = d.before > 0 ? name + " dans " + d.before + " min 🕌" : "C’est l’heure de " + name + " 🕌";
+    const payload = JSON.stringify({ title: "Coran for Malak", body, tag: "priere" });
+    for (const s of (Array.isArray(subs) ? subs : []).filter((x) => x.user_id === d.user_id)) {
+      try {
+        const r = await sendPush(s, payload, vapid, APP + "/coran-for-malak/", { ttl: 1200, urgency: "high" }); // inutile après 20 minutes
+        if (r.ok) sent++;
+        else if (r.status === 404 || r.status === 410) await db("push_subs?endpoint=eq." + encodeURIComponent(s.endpoint), { method: "DELETE" });
+      } catch { /* un téléphone injoignable n'empêche pas les autres */ }
+    }
+  }
+  return json({ sent });
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { status: 204, headers: CORS });
   if (req.method !== "POST") return json({ error: "méthode" }, 405);
@@ -102,6 +131,7 @@ Deno.serve(async (req) => {
   try { b = await req.json(); } catch { return json({ error: "corps" }, 400); }
   try {
     if (b.op === "key") return json({ key: (await vapidKeys()).publicKey });
+    if (b.op === "prayers") return await prayers(req);
     if (b.op !== "push") return json({ error: "op" }, 400);
     const me = await userOf(req);
     if (!me) return json({ error: "session" }, 401);
