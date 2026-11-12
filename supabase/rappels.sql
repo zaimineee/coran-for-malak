@@ -96,3 +96,10 @@ create table if not exists public.vapid_keys (
 );
 alter table public.vapid_keys enable row level security;
 revoke all on public.vapid_keys from anon, authenticated;
+
+-- 4. Accès de la fonction « rappel » (clé secrète = rôle service_role) : seulement ce dont elle a besoin.
+-- (Les nouveaux projets Supabase ne donnent plus ces droits automatiquement.)
+grant select, insert on public.vapid_keys to service_role;
+grant select, update (pushed) on public.nudges to service_role;
+grant select, delete on public.push_subs to service_role;
+grant select on public.stats to service_role;

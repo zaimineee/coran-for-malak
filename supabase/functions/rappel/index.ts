@@ -3,14 +3,18 @@
 // - { op: "key" } : clé publique VAPID (créée au premier appel, gardée dans public.vapid_keys, lisible par cette fonction seulement)
 // - { op: "push", target } : envoie la notification du rappel que l'ami connecté vient d'envoyer (voir send_nudge dans rappels.sql)
 // Web Push sans bibliothèque : jeton VAPID (ES256) et chiffrement aes128gcm (RFC 8291), avec WebCrypto.
-// Réglage à la publication : « Verify JWT » désactivé ; la fonction vérifie elle-même la session pour « push ».
+// La fonction vérifie elle-même la session pour « push » (jeton dans l'en-tête x-session) ; le réglage « Verify JWT » peut rester activé.
 
 const SB_URL = Deno.env.get("SUPABASE_URL") ?? "";
-const SB_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
+// clé secrète du projet : nouvelles clés (SUPABASE_SECRET_KEYS, objet JSON) sinon l'ancienne clé service_role
+const SB_KEY = (() => {
+  try { const o = JSON.parse(Deno.env.get("SUPABASE_SECRET_KEYS") ?? "{}"); const k = o?.default ?? Object.values(o ?? {})[0]; if (typeof k === "string" && k) return k; } catch { /* ancien format */ }
+  return Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
+})();
 const APP = "https://zaimineee.github.io";
 const CORS = {
   "Access-Control-Allow-Origin": APP,
-  "Access-Control-Allow-Headers": "authorization, apikey, content-type, x-client-info",
+  "Access-Control-Allow-Headers": "authorization, apikey, content-type, x-client-info, x-session",
   "Access-Control-Allow-Methods": "POST, OPTIONS",
   "Vary": "Origin",
 };
@@ -68,20 +72,23 @@ function db(path: string, init: RequestInit = {}) {
   return fetch(SB_URL + "/rest/v1/" + path, { ...init, headers: h });
 }
 async function vapidKeys() {
-  const read = async () => { const r = await db("vapid_keys?id=eq.1&select=public_key,private_jwk"); const a = await r.json(); return Array.isArray(a) && a[0] ? { publicKey: a[0].public_key, privateJwk: a[0].private_jwk } : null; };
+  const read = async () => { const r = await db("vapid_keys?id=eq.1&select=public_key,private_jwk"); if (!r.ok) throw new Error("base " + r.status); const a = await r.json(); return Array.isArray(a) && a[0] ? { publicKey: a[0].public_key, privateJwk: a[0].private_jwk } : null; };
   let k = await read();
   if (!k) {
     const n = await newVapid();
-    await db("vapid_keys", { method: "POST", headers: { Prefer: "resolution=ignore-duplicates,return=minimal" }, body: JSON.stringify({ id: 1, public_key: n.publicKey, private_jwk: n.privateJwk }) });
+    const w = await db("vapid_keys", { method: "POST", headers: { Prefer: "resolution=ignore-duplicates,return=minimal" }, body: JSON.stringify({ id: 1, public_key: n.publicKey, private_jwk: n.privateJwk }) });
+    if (!w.ok && w.status !== 409) throw new Error("base " + w.status);
     k = await read();
   }
   if (!k) throw new Error("clés indisponibles");
   return k;
 }
-async function userOf(req: Request) { // l'utilisateur connecté, d'après sa session
-  const a = req.headers.get("Authorization") ?? "";
-  if (!a.startsWith("Bearer ")) return null;
-  const r = await fetch(SB_URL + "/auth/v1/user", { headers: { apikey: SB_KEY, Authorization: a } });
+async function userOf(req: Request) { // l'utilisateur connecté, d'après sa session (vérifiée par le serveur d'authentification)
+  // jeton de session dans « x-session » (la passerelle ne le contrôle pas avec l'ancien secret) ou dans Authorization
+  const x = req.headers.get("x-session") ?? "", a = req.headers.get("Authorization") ?? "";
+  const tok = x || (a.startsWith("Bearer ") ? a.slice(7) : "");
+  if (tok.length > 4096 || !/^[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+$/.test(tok)) return null;
+  const r = await fetch(SB_URL + "/auth/v1/user", { headers: { apikey: SB_KEY, Authorization: "Bearer " + tok } });
   if (!r.ok) return null;
   const u = await r.json();
   return typeof u?.id === "string" ? u.id : null;
