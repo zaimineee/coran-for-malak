@@ -1,7 +1,7 @@
 // Service worker du site : l'app s'ouvre et se lit même sans internet.
 // Page : réseau d'abord (pour recevoir les mises à jour), cache si hors ligne. Fichiers de l'app : cache d'abord.
 // Les récitations (everyayah.com) et les polices Google passent toujours par le réseau.
-const V = 'coran-4f7fb90a-05e538';
+const V = 'coran-85c2f51b-05e538';
 const CORE = ['./', 'index.html', 'manifest.webmanifest', 'icon-192.png', 'data/hafs.z.json', 'fonts/hafs.woff2'];
 self.addEventListener('install', (e) => {
   e.waitUntil(caches.open(V).then((c) => c.addAll(CORE).catch(() => {})).then(() => self.skipWaiting()));
