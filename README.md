@@ -1,6 +1,6 @@
 # Coran for Malak
 
-App web pour lire, mémoriser et réviser le Coran (Hafs et Warsh), avec une série de lecture, les hasanat, les statistiques du jour, de la semaine, du mois et de l’année, et des comptes séparés sur chaque téléphone.
+App web pour lire, mémoriser et réviser le Coran (Hafs et Warsh), avec une série de lecture, les hasanat, les statistiques du jour, de la semaine, du mois et de l’année, des comptes séparés sur chaque téléphone, et des identifiants en ligne (facultatifs) pour retrouver sa progression sur un autre téléphone et voir si ses amis ont lu aujourd’hui.
 
 Ouvre le site sur ton iPhone dans Safari, puis Partager → « Sur l’écran d’accueil » pour l’installer comme une app.
 
@@ -14,6 +14,7 @@ Ouvre le site sur ton iPhone dans Safari, puis Partager → « Sur l’écran d�
 - **Calligraphies** : Amiri Quran (Khaled Hosny) et Scheherazade New (SIL International), SIL Open Font License 1.1, via Google Fonts.
 - **Récitations** : fichiers ayah par ayah d’[everyayah.com](https://everyayah.com), avec le miroir vérifié [Maqra](https://huggingface.co/maqra-project) en secours. Ils sont lus sans aucune modification, pour un usage non commercial (apprentissage, mémorisation). Merci aux récitateurs, dont le nom s’affiche pendant l’écoute, et à everyayah.com.
 - **Heures de prière et Qibla** : calcul astronomique fait dans l’app, avec les angles publiés par chaque organisme (Ligue islamique mondiale, ISNA, Umm al-Qura, etc.). La boussole corrige le nord magnétique avec le Modèle magnétique mondial WMM2025 (NOAA et British Geological Survey, domaine public). Ta position reste sur ton téléphone.
+- **Comptes en ligne** : [Supabase](https://supabase.com) (connexion et base PostgreSQL). Les règles d’accès de chaque table sont dans `supabase/schema.sql`. Une tâche GitHub quotidienne (`.github/workflows/garder-en-ligne.yml`) appelle la base pour que le projet gratuit ne se mette pas en pause.
 - **Mascottes et design** : Malak, Bûma et Hamâma sont des créations originales de l’app.
 
 Le nombre de hasanat est une estimation (10 par lettre, d’après le hadith rapporté par at-Tirmidhî, n° 2910). Allah seul connaît la récompense.

@@ -1,0 +1,20 @@
+# Une petite visite par jour à la base en ligne de l'app (Supabase) :
+# un projet gratuit sans aucune visite pendant 7 jours est mis en pause.
+# La clé est la clé publique de l'app (la même que dans index.html) : elle ne donne accès qu'à la fonction ping().
+name: Garder la base en ligne
+on:
+  schedule:
+    - cron: '23 5 * * *'
+  workflow_dispatch:
+permissions: {}
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Appeler ping()
+        run: |
+          curl -fsS --retry 3 --retry-delay 20 -X POST \
+            "https://jqlhxsngakelcadtqmkd.supabase.co/rest/v1/rpc/ping" \
+            -H "apikey: sb_publishable_zzMX4GqErNkrRr1jznCY0Q_hHwAh1GX" \
+            -H "Content-Type: application/json" -d '{}'
