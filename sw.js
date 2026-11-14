@@ -1,17 +1,23 @@
 // Service worker du site : l'app s'ouvre et se lit même sans internet.
 // Page : réseau d'abord (pour recevoir les mises à jour), cache si hors ligne. Fichiers de l'app : cache d'abord.
 // Les récitations (everyayah.com) et les polices Google passent toujours par le réseau.
-const V = 'coran-cad81e58-05e538';
+const V = 'coran-4d792b97-05e538';
+// moteur de « Réciter de mémoire » (≈ 22 Mo) : gardé à part, pour ne pas le retélécharger à chaque mise à jour de l'app
+const AI = 'ia-630831bb';
 const CORE = ['./', 'index.html', 'manifest.webmanifest', 'icon-192.png', 'data/hafs.z.json', 'fonts/hafs.woff2'];
 self.addEventListener('install', (e) => {
   e.waitUntil(caches.open(V).then((c) => c.addAll(CORE).catch(() => {})).then(() => self.skipWaiting()));
 });
 self.addEventListener('activate', (e) => {
-  e.waitUntil(caches.keys().then((ks) => Promise.all(ks.filter((k) => k.startsWith('coran-') && k !== V).map((k) => caches.delete(k)))).then(() => self.clients.claim()));
+  e.waitUntil(caches.keys().then((ks) => Promise.all(ks.filter((k) => (k.startsWith('coran-') && k !== V) || (k.startsWith('ia-') && k !== AI)).map((k) => caches.delete(k)))).then(() => self.clients.claim()));
 });
 self.addEventListener('fetch', (e) => {
   const req = e.request, u = new URL(req.url);
   if (req.method !== 'GET' || u.origin !== self.location.origin || req.headers.has('range')) return;
+  if (u.pathname.includes('/ai/')) {
+    e.respondWith(caches.open(AI).then((c) => c.match(req, { ignoreSearch: true }).then((hit) => hit || fetch(req).then((r) => { if (r.ok && r.status === 200) c.put(req, r.clone()); return r; }))));
+    return;
+  }
   const page = req.mode === 'navigate' || u.pathname.endsWith('/') || u.pathname.endsWith('/index.html');
   if (page) {
     e.respondWith(fetch(req).then((r) => { if (r.ok) { const c = r.clone(); caches.open(V).then((ca) => ca.put('index.html', c)); } return r; })
