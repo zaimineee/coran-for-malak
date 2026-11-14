@@ -145,7 +145,7 @@ Deno.serve(async (req) => {
     const name = String((who?.[0]?.name || "") || ("@" + (who?.[0]?.username || "un ami"))).slice(0, 30);
     const subs = await (await db("push_subs?select=endpoint,p256dh,auth&user_id=eq." + b.target)).json();
     const vapid = await vapidKeys();
-    const payload = JSON.stringify({ title: "Coran for Malak", body: name + " te rappelle de lire le Coran aujourd’hui 💛" });
+    const payload = JSON.stringify({ title: "Coran for Malak", body: name + " t’encourage à lire le Coran aujourd’hui 💛" });
     let sent = 0;
     for (const s of Array.isArray(subs) ? subs : []) {
       try {
