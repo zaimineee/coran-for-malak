@@ -1,9 +1,9 @@
 // Service worker du site : l'app s'ouvre et se lit même sans internet.
 // Page : réseau d'abord (pour recevoir les mises à jour), cache si hors ligne. Fichiers de l'app : cache d'abord.
 // Les récitations (everyayah.com) et les polices Google passent toujours par le réseau.
-const V = 'coran-86c80e65-05e538';
+const V = 'coran-a05b92d3-05e538';
 // moteur de « Réciter de mémoire » (≈ 22 Mo) : gardé à part, pour ne pas le retélécharger à chaque mise à jour de l'app
-const AI = 'ia-21ab6b96';
+const AI = 'ia-9cf9939b';
 const CORE = ['./', 'index.html', 'manifest.webmanifest', 'icon-192.png', 'data/hafs.z.json', 'fonts/hafs.woff2'];
 self.addEventListener('install', (e) => {
   e.waitUntil(caches.open(V).then((c) => c.addAll(CORE).catch(() => {})).then(() => self.skipWaiting()));
@@ -11,17 +11,24 @@ self.addEventListener('install', (e) => {
 self.addEventListener('activate', (e) => {
   e.waitUntil(caches.keys().then((ks) => Promise.all(ks.filter((k) => (k.startsWith('coran-') && k !== V) || (k.startsWith('ia-') && k !== AI)).map((k) => caches.delete(k)))).then(() => self.clients.claim()));
 });
+// Pages et moteur de l'IA servis « isolés » (Cross-Origin-Opener/Embedder-Policy) : l'IA peut alors calculer sur plusieurs cœurs.
+// Les sons d'everyayah sont alors demandés en CORS (ils le permettent) ; tout le reste vient du site ou passe en CORS.
+const coi = (r) => {
+  if (!r || !r.ok || r.type === 'opaque' || r.type === 'opaqueredirect' || r.redirected) return r;
+  const h = new Headers(r.headers); h.set('Cross-Origin-Embedder-Policy', 'require-corp'); h.set('Cross-Origin-Opener-Policy', 'same-origin');
+  return new Response(r.body, { status: r.status, statusText: r.statusText, headers: h });
+};
 self.addEventListener('fetch', (e) => {
   const req = e.request, u = new URL(req.url);
   if (req.method !== 'GET' || u.origin !== self.location.origin || req.headers.has('range')) return;
   if (u.pathname.includes('/ai/')) {
-    e.respondWith(caches.open(AI).then((c) => c.match(req, { ignoreSearch: true }).then((hit) => hit || fetch(req).then((r) => { if (r.ok && r.status === 200) c.put(req, r.clone()); return r; }))));
+    e.respondWith(caches.open(AI).then((c) => c.match(req, { ignoreSearch: true }).then((hit) => hit || fetch(req).then((r) => { if (r.ok && r.status === 200) c.put(req, r.clone()); return r; }))).then(coi));
     return;
   }
   const page = req.mode === 'navigate' || u.pathname.endsWith('/') || u.pathname.endsWith('/index.html');
   if (page) {
     e.respondWith(fetch(req).then((r) => { if (r.ok) { const c = r.clone(); caches.open(V).then((ca) => ca.put('index.html', c)); } return r; })
-      .catch(() => caches.match('index.html').then((r) => r || caches.match('./'))));
+      .catch(() => caches.match('index.html').then((r) => r || caches.match('./'))).then(coi));
     return;
   }
   e.respondWith(caches.match(req).then((hit) => hit || fetch(req).then((r) => {
