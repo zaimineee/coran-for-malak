@@ -1,0 +1,18 @@
+Sons des notifications de Coran for Malak
+=========================================
+
+adhan.mp3 et takbir.mp3 sont des adaptations de :
+
+  « The Adhan - Muslim Call to Prayer - Aaqib Azeez.mp3 »
+  Auteur : Atcovi, sur Wikimedia Commons
+  https://commons.wikimedia.org/wiki/File:The_Adhan_-_Muslim_Call_to_Prayer_-_Aaqib_Azeez.mp3
+  Licence : Creative Commons Attribution - Partage dans les mêmes conditions 4.0 International (CC BY-SA 4.0)
+  https://creativecommons.org/licenses/by-sa/4.0/deed.fr
+
+Modifications faites pour l'app (novembre 2026) :
+  - adhan.mp3 : l'enregistrement complet, converti en mono, MP3 à 64 kbit/s ;
+  - takbir.mp3 : les 5,7 premières secondes du même enregistrement (« Allahu Akbar, Allahu Akbar »),
+    avec un fondu à la fin, mono, MP3 à 80 kbit/s.
+
+Ces deux fichiers modifiés sont partagés sous la même licence, CC BY-SA 4.0.
+Aucune approbation de l'auteur ou de Wikimedia Commons n'est sous-entendue.

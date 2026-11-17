@@ -3,6 +3,7 @@
 // - { op: "key" } : clé publique VAPID (créée au premier appel, gardée dans public.vapid_keys, lisible par cette fonction seulement)
 // - { op: "push", target } : envoie la notification du rappel que l'ami connecté vient d'envoyer (voir send_nudge dans rappels.sql)
 // - { op: "prayers" } : appelé chaque minute par la tâche planifiée (prieres.sql, en-tête x-cron) : envoie les alertes de prière dues
+//   et les rappels quotidiens de lecture (rappel-lecture.sql)
 // Web Push sans bibliothèque : jeton VAPID (ES256) et chiffrement aes128gcm (RFC 8291), avec WebCrypto.
 // La fonction vérifie elle-même la session pour « push » (jeton dans l'en-tête x-session) ; le réglage « Verify JWT » peut rester activé.
 
@@ -110,12 +111,13 @@ async function prayers(req: Request) {
   const vapid = await vapidKeys();
   let sent = 0;
   for (const d of due) {
-    const name = PRAYER[d.prayer]; if (!name) continue;
-    const body = d.before > 0 ? name + " dans " + d.before + " min 🕌" : "C’est l’heure de " + name + " 🕌";
-    const payload = JSON.stringify({ title: "Coran for Malak", body, tag: "priere" });
+    const lec = d.prayer === "lecture", name = PRAYER[d.prayer]; if (!name && !lec) continue;
+    // rappel quotidien de lecture (rappel-lecture.sql) : déjà filtré par la base si la lecture du jour est faite
+    const body = lec ? "📖 C’est le moment de ta lecture du jour. Un peu chaque jour 🤍" : d.before > 0 ? name + " dans " + d.before + " min 🕌" : "C’est l’heure de " + name + " 🕌";
+    const payload = JSON.stringify(lec ? { title: "Coran for Malak", body, tag: "lecture" } : { title: "Coran for Malak", body, tag: "priere", k: d.prayer });
     for (const s of (Array.isArray(subs) ? subs : []).filter((x) => x.user_id === d.user_id)) {
       try {
-        const r = await sendPush(s, payload, vapid, APP + "/coran-for-malak/", { ttl: 1200, urgency: "high" }); // inutile après 20 minutes
+        const r = await sendPush(s, payload, vapid, APP + "/coran-for-malak/", { ttl: lec ? 3600 : 1200, urgency: "high" }); // une alerte de prière est inutile après 20 minutes
         if (r.ok) sent++;
         else if (r.status === 404 || r.status === 410) await db("push_subs?endpoint=eq." + encodeURIComponent(s.endpoint), { method: "DELETE" });
       } catch { /* un téléphone injoignable n'empêche pas les autres */ }

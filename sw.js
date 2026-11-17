@@ -1,15 +1,17 @@
 // Service worker du site : l'app s'ouvre et se lit même sans internet.
 // Page : réseau d'abord (pour recevoir les mises à jour), cache si hors ligne. Fichiers de l'app : cache d'abord.
 // Les récitations (everyayah.com) et les polices Google passent toujours par le réseau.
-const V = 'coran-05bb2c21-05e538';
+const V = 'coran-f4e97c5c-05e538';
 // moteur de « Réciter de mémoire » (≈ 22 Mo) : gardé à part, pour ne pas le retélécharger à chaque mise à jour de l'app
 const AI = 'ia-5902d3c0';
+// sons des notifications (adhan, Allahu Akbar) : gardés à part eux aussi, pour sonner même sans réseau
+const SONS = 'sons-1';
 const CORE = ['./', 'index.html', 'manifest.webmanifest', 'icon-192.png', 'data/hafs.z.json', 'fonts/hafs.woff2'];
 self.addEventListener('install', (e) => {
   e.waitUntil(caches.open(V).then((c) => c.addAll(CORE).catch(() => {})).then(() => self.skipWaiting()));
 });
 self.addEventListener('activate', (e) => {
-  e.waitUntil(caches.keys().then((ks) => Promise.all(ks.filter((k) => (k.startsWith('coran-') && k !== V) || (k.startsWith('ia-') && k !== AI)).map((k) => caches.delete(k)))).then(() => self.clients.claim()));
+  e.waitUntil(caches.keys().then((ks) => Promise.all(ks.filter((k) => (k.startsWith('coran-') && k !== V) || (k.startsWith('ia-') && k !== AI) || (k.startsWith('sons-') && k !== SONS)).map((k) => caches.delete(k)))).then(() => self.clients.claim()));
 });
 // Pages et moteur de l'IA servis « isolés » (Cross-Origin-Opener/Embedder-Policy) : l'IA peut alors calculer sur plusieurs cœurs.
 // Les sons d'everyayah sont alors demandés en CORS (ils le permettent) ; tout le reste vient du site ou passe en CORS.
@@ -25,6 +27,10 @@ self.addEventListener('fetch', (e) => {
     e.respondWith(caches.open(AI).then((c) => c.match(req, { ignoreSearch: true }).then((hit) => hit || fetch(req).then((r) => { if (r.ok && r.status === 200) c.put(req, r.clone()); return r; }))).then(coi));
     return;
   }
+  if (u.pathname.includes('/sons/')) {
+    e.respondWith(caches.open(SONS).then((c) => c.match(req, { ignoreSearch: true }).then((hit) => hit || fetch(req).then((r) => { if (r.ok && r.status === 200) c.put(req, r.clone()); return r; }))));
+    return;
+  }
   const page = req.mode === 'navigate' || u.pathname.endsWith('/') || u.pathname.endsWith('/index.html');
   if (page) {
     e.respondWith(fetch(req).then((r) => { if (r.ok) { const c = r.clone(); caches.open(V).then((ca) => ca.put('index.html', c)); } return r; })
@@ -37,18 +43,32 @@ self.addEventListener('fetch', (e) => {
   })));
 });
 
-// Notifications : rappels d'un ami (« rappel ») et alertes de prière (« priere ») ; le texte est vérifié,
-// la page ouverte est toujours celle de l'app
+// Notifications : rappels d'un ami (« rappel »), alertes de prière (« priere ») et rappel de lecture (« lecture ») ;
+// le texte est vérifié, la page ouverte est toujours celle de l'app.
+// Son : l'iPhone joue son propre son (une web app ne peut pas en choisir un autre), ou aucun avec « Sans son ».
+// Si l'app est ouverte, elle joue elle-même le son choisi (adhan, Allahu Akbar, cloche) : la notification ne sonne pas en plus.
+const PR = ['fajr', 'dhuhr', 'asr', 'maghrib', 'isha'];
 self.addEventListener('push', (e) => {
   let d = {}; try { d = e.data ? e.data.json() : {}; } catch (x) { d = {}; }
-  const tag = d.tag === 'priere' ? 'priere' : 'rappel';
+  if (!d || typeof d !== 'object') d = {};
+  const tag = d.tag === 'priere' || d.tag === 'lecture' ? d.tag : 'rappel';
+  const k = tag === 'priere' && PR.includes(d.k) ? d.k : '';
   const title = typeof d.title === 'string' && d.title ? d.title.slice(0, 60) : 'Coran for Malak';
-  const body = typeof d.body === 'string' && d.body ? d.body.slice(0, 160) : tag === 'priere' ? 'C’est l’heure de la prière 🕌' : 'Un ami te rappelle de lire le Coran aujourd’hui 💛';
-  e.waitUntil(self.registration.showNotification(title, { body, icon: 'icon-192.png', badge: 'icon-192.png', tag, renotify: true }));
+  const body = typeof d.body === 'string' && d.body ? d.body.slice(0, 160) : tag === 'priere' ? 'C’est l’heure de la prière 🕌' : tag === 'lecture' ? '📖 C’est le moment de ta lecture du jour.' : 'Un ami te rappelle de lire le Coran aujourd’hui 💛';
+  e.waitUntil((async () => {
+    let pf = {};
+    try { const r = await (await caches.open('notif-prefs')).match('prefs.json'); if (r) pf = await r.json(); } catch (x) { pf = {}; }
+    const snd = tag === 'priere' ? pf.sp : tag === 'lecture' ? pf.sl : '';
+    let wins = []; try { wins = await self.clients.matchAll({ type: 'window', includeUncontrolled: true }); } catch (x) { wins = []; }
+    const own = (snd === 'adhan' || snd === 'takbir' || snd === 'cloche') && wins.some((c) => c.visibilityState === 'visible');
+    const silent = snd === 'muet' || own;
+    await self.registration.showNotification(title, { body, icon: 'icon-192.png', badge: 'icon-192.png', tag, renotify: !silent, silent });
+    if (tag !== 'rappel') for (const c of wins) { try { c.postMessage({ t: 'notif', tag, k, body }); } catch (x) {} }
+  })());
 });
 self.addEventListener('notificationclick', (e) => {
   e.notification.close();
-  const url = new URL(e.notification.tag === 'priere' ? './#prieres' : './#rappels', self.registration.scope).href;
+  const t = e.notification.tag, url = new URL(t === 'priere' ? './#prieres' : t === 'lecture' ? './#lecture' : './#rappels', self.registration.scope).href;
   e.waitUntil((async () => {
     const all = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
     for (const c of all) { if (c.url.startsWith(self.registration.scope)) { try { await c.navigate(url); } catch (x) {} return c.focus(); } }
