@@ -1,0 +1,11 @@
+Modèle de reconnaissance de la récitation utilisé par Coran for Malak
+====================================================================
+
+quran-asr-tiny.int8.onnx : « quran-asr-tiny » d'Abdou, version int8, sans modification.
+  Source : https://huggingface.co/Abdou/quran-asr-tiny (fichier model.int8.onnx)
+  Empreinte SHA-256 : 58de6db034bb4f6516b3bc1c68e7a0ac4e77abffe603a550ee87b39dcd0c7ac6
+  Licence : MIT (voir LICENSE, Copyright (c) 2026 Abdou).
+  Zipformer-CTC, 16 M de paramètres ; lettres arabes sans voyelles (tokens.txt).
+  Données d'entraînement (selon la fiche du modèle) : EveryAyah (Hafs et Warsh), tarteel-ai/tlog, IqraEval.
+
+L'app le fait tourner sur le téléphone avec ONNX Runtime Web (MIT). La voix n'est jamais envoyée.

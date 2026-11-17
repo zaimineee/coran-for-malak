@@ -1,17 +1,19 @@
 // Service worker du site : l'app s'ouvre et se lit même sans internet.
 // Page : réseau d'abord (pour recevoir les mises à jour), cache si hors ligne. Fichiers de l'app : cache d'abord.
 // Les récitations (everyayah.com) et les polices Google passent toujours par le réseau.
-const V = 'coran-f4e97c5c-05e538';
+const V = 'coran-e435f758-05e538';
 // moteur de « Réciter de mémoire » (≈ 22 Mo) : gardé à part, pour ne pas le retélécharger à chaque mise à jour de l'app
-const AI = 'ia-5902d3c0';
+const AI = 'ia-e1f06c4f';
 // sons des notifications (adhan, Allahu Akbar) : gardés à part eux aussi, pour sonner même sans réseau
 const SONS = 'sons-1';
+// ancien moteur de l'IA (Whisper, ≈ 125 Mo, 1.14 à 1.20) : effacé pour rendre la place sur le téléphone
+const OLD = ['transformers-cache'];
 const CORE = ['./', 'index.html', 'manifest.webmanifest', 'icon-192.png', 'data/hafs.z.json', 'fonts/hafs.woff2'];
 self.addEventListener('install', (e) => {
   e.waitUntil(caches.open(V).then((c) => c.addAll(CORE).catch(() => {})).then(() => self.skipWaiting()));
 });
 self.addEventListener('activate', (e) => {
-  e.waitUntil(caches.keys().then((ks) => Promise.all(ks.filter((k) => (k.startsWith('coran-') && k !== V) || (k.startsWith('ia-') && k !== AI) || (k.startsWith('sons-') && k !== SONS)).map((k) => caches.delete(k)))).then(() => self.clients.claim()));
+  e.waitUntil(caches.keys().then((ks) => Promise.all(ks.filter((k) => (k.startsWith('coran-') && k !== V) || (k.startsWith('ia-') && k !== AI) || (k.startsWith('sons-') && k !== SONS) || OLD.includes(k)).map((k) => caches.delete(k)))).then(() => self.clients.claim()));
 });
 // Pages et moteur de l'IA servis « isolés » (Cross-Origin-Opener/Embedder-Policy) : l'IA peut alors calculer sur plusieurs cœurs.
 // Les sons d'everyayah sont alors demandés en CORS (ils le permettent) ; tout le reste vient du site ou passe en CORS.
@@ -23,6 +25,7 @@ const coi = (r) => {
 self.addEventListener('fetch', (e) => {
   const req = e.request, u = new URL(req.url);
   if (req.method !== 'GET' || u.origin !== self.location.origin || req.headers.has('range')) return;
+  if (u.pathname.includes('/ia-modele/')) return; // le modèle de l'IA (19 Mo) : le travailleur le télécharge, le vérifie et le garde lui-même (cache « modele-ia-1 »)
   if (u.pathname.includes('/ai/')) {
     e.respondWith(caches.open(AI).then((c) => c.match(req, { ignoreSearch: true }).then((hit) => hit || fetch(req).then((r) => { if (r.ok && r.status === 200) c.put(req, r.clone()); return r; }))).then(coi));
     return;
