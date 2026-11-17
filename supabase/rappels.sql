@@ -1,7 +1,7 @@
 -- Coran for Malak : rappels entre amis (« Pense à lire le Coran aujourd'hui ») et notifications quand l'app est fermée.
 -- À exécuter une fois dans l'éditeur SQL de Supabase, après schema.sql.
 
--- 1. Les rappels : seulement entre amis qui se sont ajoutés tous les deux, au plus un toutes les 6 heures
+-- 1. Les rappels : seulement entre amis qui se sont ajoutés tous les deux, au plus un par heure (et 100 par jour en tout)
 create table if not exists public.nudges (
   id bigint generated always as identity primary key,
   sender uuid not null references auth.users(id) on delete cascade,
@@ -31,8 +31,8 @@ begin
   if target is null or target = me then return 'soi'; end if;
   if not exists (select 1 from public.friends f where f.owner = me and f.friend = target)
      or not exists (select 1 from public.friends f where f.owner = target and f.friend = me) then return 'pas_ami'; end if;
-  if exists (select 1 from public.nudges n where n.sender = me and n.receiver = target and n.created_at > now() - interval '6 hours') then return 'deja'; end if;
-  if (select count(*) from public.nudges n where n.sender = me and n.created_at > now() - interval '1 day') >= 30 then return 'trop'; end if;
+  if exists (select 1 from public.nudges n where n.sender = me and n.receiver = target and n.created_at > now() - interval '1 hour') then return 'deja'; end if;
+  if (select count(*) from public.nudges n where n.sender = me and n.created_at > now() - interval '1 day') >= 100 then return 'trop'; end if;
   insert into public.nudges (sender, receiver) values (me, target);
   delete from public.nudges n where n.created_at < now() - interval '30 days';
   return 'ok';
