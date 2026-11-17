@@ -1,7 +1,7 @@
 // Service worker du site : l'app s'ouvre et se lit même sans internet.
 // Page : réseau d'abord (pour recevoir les mises à jour), cache si hors ligne. Fichiers de l'app : cache d'abord.
 // Les récitations (everyayah.com) et les polices Google passent toujours par le réseau.
-const V = 'coran-e435f758-05e538';
+const V = 'coran-ae174706-05e538';
 // moteur de « Réciter de mémoire » (≈ 22 Mo) : gardé à part, pour ne pas le retélécharger à chaque mise à jour de l'app
 const AI = 'ia-e1f06c4f';
 // sons des notifications (adhan, Allahu Akbar) : gardés à part eux aussi, pour sonner même sans réseau
@@ -66,7 +66,7 @@ self.addEventListener('push', (e) => {
     const own = (snd === 'adhan' || snd === 'takbir' || snd === 'cloche') && wins.some((c) => c.visibilityState === 'visible');
     const silent = snd === 'muet' || own;
     await self.registration.showNotification(title, { body, icon: 'icon-192.png', badge: 'icon-192.png', tag, renotify: !silent, silent });
-    if (tag !== 'rappel') for (const c of wins) { try { c.postMessage({ t: 'notif', tag, k, body }); } catch (x) {} }
+    for (const c of wins) { try { c.postMessage({ t: 'notif', tag, k, body }); } catch (x) {} } // l'app ouverte réagit tout de suite (son, encouragement affiché)
   })());
 });
 self.addEventListener('notificationclick', (e) => {

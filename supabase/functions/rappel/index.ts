@@ -147,11 +147,12 @@ Deno.serve(async (req) => {
     const name = String((who?.[0]?.name || "") || ("@" + (who?.[0]?.username || "un ami"))).slice(0, 30);
     const subs = await (await db("push_subs?select=endpoint,p256dh,auth&user_id=eq." + b.target)).json();
     const vapid = await vapidKeys();
-    const payload = JSON.stringify({ title: "Coran for Malak", body: name + " t’encourage à lire le Coran aujourd’hui 💛" });
+    const payload = JSON.stringify({ title: "Coran for Malak", body: name + " t’encourage à lire le Coran aujourd’hui 💛", tag: "rappel" });
     let sent = 0;
     for (const s of Array.isArray(subs) ? subs : []) {
       try {
-        const r = await sendPush(s, payload, vapid, APP + "/coran-for-malak/");
+        // en temps réel, comme les alertes de prière : priorité haute (sinon l'iPhone peut la garder pour plus tard), utile pendant 6 h
+        const r = await sendPush(s, payload, vapid, APP + "/coran-for-malak/", { ttl: 21600, urgency: "high" });
         if (r.ok) sent++;
         else if (r.status === 404 || r.status === 410) await db("push_subs?endpoint=eq." + encodeURIComponent(s.endpoint), { method: "DELETE" }); // abonnement expiré
       } catch { /* un téléphone injoignable n'empêche pas les autres */ }
